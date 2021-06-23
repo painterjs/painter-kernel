@@ -1,0 +1,37 @@
+{
+  "name": "painter-kernel",
+  "version": "1.0.0",
+  "description": "painter 核心逻辑库",
+  "main": "dist/painter.js",
+  "scripts": {
+    "build": "webpack --config ./webpack.config.js",
+    "prd": "npm publish"
+  },
+  "author": "kujiale-mobile",
+  "homepage": "https://github.com/Kujiale-Mobile/Painter#readme",
+  "license": "MIT",
+  "keywords": [
+    "Painter"
+  ],
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kujiale-Mobile/Painter.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "bugs": {
+    "url": "https://github.com/Kujiale-Mobile/Painter/issues"
+  },
+  "devDependencies": {
+    "@types/react": "^17.0.11",
+    "path": "^0.12.7",
+    "ts-loader": "^9.2.3",
+    "typescript": "^4.3.4",
+    "webpack": "^5.40.0",
+    "webpack-cli": "^4.7.2"
+  }
+}
