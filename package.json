@@ -8,7 +8,7 @@
     "prd": "npm publish"
   },
   "author": "kujiale-mobile",
-  "homepage": "https://github.com/Kujiale-Mobile/Painter#readme",
+  "homepage": "https://painterjs.github.io/",
   "license": "MIT",
   "keywords": [
     "Painter"
@@ -18,13 +18,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kujiale-Mobile/Painter.git"
+    "url": "git+https://github.com/painterjs/painter-kernel"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
   "bugs": {
-    "url": "https://github.com/Kujiale-Mobile/Painter/issues"
+    "url": "https://github.com/painterjs/painter-kernel/issues"
   },
   "devDependencies": {
     "@types/react": "^17.0.11",
