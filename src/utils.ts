@@ -1,5 +1,5 @@
 import calculate from './calc';
-import { penCache } from './pen';
+import { IView, penCache } from './pen';
 
 let screenK = 0.5,
   scale = 1;
@@ -33,8 +33,11 @@ export function toPx(str: string | number, baseSize?: number): number {
   if (formula && formula[1]) {
     const afterOne = formula[1].replace(/([^\s\(\+\-\*\/]+)\.(left|right|bottom|top|width|height)/g, word => {
       const [id, attr] = word.split('.');
-      // @ts-ignore
-      return penCache.viewRect[id]![attr];
+      if (penCache.viewRect[id]) {
+        return penCache.viewRect[id]![attr];
+      } else {
+        return 0;
+      }
     });
     const afterTwo = afterOne.replace(/-?[0-9]+(\.[0-9]+)?(rpx|px|%)/g, origin => parsePx(origin, baseSize));
     return calculate(afterTwo);
@@ -49,17 +52,49 @@ export function setStringPrototype(screenK = 0.5, scale = 1) {
 }
 
 interface Injection {
-  loadImage: (url: string) => Promise<any>;
+  loadImage: (url: string) => Promise<{
+    img: any;
+    width: number;
+    height: number;
+  }>;
   getRatio: () => number;
+  customActions: {
+    [type: string]: {
+      layout: (
+        view: IView,
+        viewRects: {
+          [id: string]: {
+            width: number;
+            height: number;
+            left: number;
+            top: number;
+            right: number;
+            bottom: number;
+          };
+        },
+      ) => {
+        left: number;
+        top: number;
+        right: number;
+        bottom: number;
+      };
+      draw: (view: IView, ctx: CanvasRenderingContext2D) => Promise<void>;
+    };
+  };
 }
 
 export let injection: Injection = {
   loadImage(url: string) {
-    return Promise.resolve(url);
+    return Promise.resolve({
+      img: url,
+      width: 0,
+      height: 0,
+    });
   },
   getRatio() {
     return 1;
   },
+  customActions: {},
 };
 
 export function initInjection(inject: Partial<Injection>) {

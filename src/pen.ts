@@ -32,7 +32,7 @@ export const penCache: {
   textLines: {},
 };
 
-export const clearPenCache = (id: string) => {
+export const clearPenCache = (id?: string) => {
   if (id) {
     penCache.viewRect[id] = null;
     penCache.textLines[id] = null;
@@ -137,13 +137,14 @@ export class Pen {
       this.ctx.fillRect(-(width / 2), -(height / 2), width, height);
     } else {
       // 背景填充图片
-      this.ctx.drawImage(await injection.loadImage(bg), -(width / 2), -(height / 2), width, height);
+      const { img } = await injection.loadImage(bg);
+      this.ctx.drawImage(img, -(width / 2), -(height / 2), width, height);
     }
     this.ctx.restore();
   }
 
   _drawAbsolute(view: IView) {
-    return new Promise<void>(resolve => {
+    return new Promise<void>(async resolve => {
       if (!(view && view.type)) {
         // 过滤无效 view
         return;
@@ -155,18 +156,36 @@ export class Pen {
       }
       switch (view.type) {
         case 'image':
-          this._drawAbsImage(view);
+          await this._drawAbsImage(view);
           break;
         case 'text':
-          this._fillAbsText(view);
+          await this._fillAbsText(view);
           break;
         case 'rect':
-          this._drawAbsRect(view);
+          await this._drawAbsRect(view);
           break;
         case 'qrcode':
-          this._drawQRCode(view);
+          await this._drawQRCode(view);
           break;
         default:
+          if (injection.customActions[view.type]) {
+            const newRect = injection.customActions[view.type].layout(
+              view,
+              JSON.parse(JSON.stringify(penCache.viewRect || {})),
+            );
+            if (view.id) {
+              penCache.viewRect[view.id] = {
+                ...newRect,
+                height: newRect.bottom - newRect.top,
+                width: newRect.right - newRect.left,
+              };
+            }
+            this.ctx.save();
+            await injection.customActions[view.type].draw(view, this.ctx);
+            this.ctx.restore();
+          } else {
+            console.log('ignore', view.type);
+          }
           break;
       }
       resolve();
@@ -199,6 +218,8 @@ export class Pen {
           r2 = Math.min(toPx(border[1], minSize), width / 2, height / 2);
           r3 = Math.min(toPx(border[2], minSize), width / 2, height / 2);
           r4 = Math.min(toPx(border[3], minSize), width / 2, height / 2);
+        } else {
+          r1 = r2 = r3 = r4 = Math.min(toPx(border[0], minSize), width / 2, height / 2);
         }
       } else {
         r1 = r2 = r3 = r4 = Math.min(toPx(borderRadius), width / 2, height / 2);
@@ -397,14 +418,18 @@ export class Pen {
         // [right, 文字id, 乘数（默认 1）]
         const rights = view.css.right as unknown as [string, string, number];
         x =
-          this.style.width - toPx(rights[0], this.style.width) - penCache.viewRect[rights[1]]!.width * (rights[2] || 1);
+          this.style.width -
+          toPx(rights[0], this.style.width) -
+          (penCache.viewRect[rights[1]] ? penCache.viewRect[rights[1]].width * (rights[2] || 1) : 0);
       }
     } else if (view.css && view.css.left) {
       if (typeof view.css.left === 'string') {
         x = toPx(view.css.left, this.style.width);
       } else {
         const lefts = view.css.left as unknown as [string, string, number];
-        x = toPx(lefts[0], this.style.width) + penCache.viewRect[lefts[1]]!.width * (lefts[2] || 1);
+        x =
+          toPx(lefts[0], this.style.width) +
+          (penCache.viewRect[lefts[1]] ? penCache.viewRect[lefts[1]].width * (lefts[2] || 1) : 0);
       }
     } else {
       x = 0;
@@ -419,7 +444,9 @@ export class Pen {
           y = toPx(view.css.top, this.style.height);
         } else {
           const tops = view.css.top as unknown as [string, string, number];
-          y = toPx(tops[0], this.style.height) + penCache.viewRect[tops[1]]!.height * (tops[2] || 1);
+          y =
+            toPx(tops[0], this.style.height) +
+            (penCache.viewRect[tops[1]] ? penCache.viewRect[tops[1]].height * (tops[2] || 1) : 0);
         }
       } else {
         y = 0;
@@ -600,6 +627,9 @@ export class Pen {
     }
     this.ctx.save();
     const { width, height } = this._preProcess(view)!;
+    const { img, width: sWidth, height: sHeight } = await injection.loadImage(view.url);
+    view.sHeight = sHeight;
+    view.sWidth = sWidth;
     // 获得缩放到图片大小级别的裁减框
     let rWidth = view.sWidth;
     let rHeight = view.sHeight;
@@ -617,19 +647,9 @@ export class Pen {
       startX = Math.round((view.sWidth! - rWidth) / 2);
     }
     if (view.css && view.css.mode === 'scaleToFill') {
-      this.ctx.drawImage(await injection.loadImage(view.url), -(width / 2), -(height / 2), width, height);
+      this.ctx.drawImage(img, -(width / 2), -(height / 2), width, height);
     } else {
-      this.ctx.drawImage(
-        await injection.loadImage(view.url),
-        startX,
-        startY,
-        rWidth!,
-        rHeight!,
-        -(width / 2),
-        -(height / 2),
-        width,
-        height,
-      );
+      this.ctx.drawImage(img, startX, startY, rWidth!, rHeight!, -(width / 2), -(height / 2), width, height);
       view.rect!.startX = startX / view.sWidth!;
       view.rect!.startY = startY / view.sHeight!;
       view.rect!.endX = (startX + rWidth!) / view.sWidth!;

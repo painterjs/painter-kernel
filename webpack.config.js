@@ -18,13 +18,11 @@ module.exports = {
   output: {
     filename: 'painter.js',
     path: path.resolve(__dirname, 'dist'),
-    libraryTarget: 'module',
+    library: {
+      type: 'module',
+    },
   },
   experiments: {
     outputModule: true,
-    syncWebAssembly: true,
-    topLevelAwait: true,
-    asyncWebAssembly: true,
-    layers: true,
   },
 };
