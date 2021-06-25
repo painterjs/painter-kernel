@@ -138,7 +138,7 @@ export class Pen {
     } else {
       // 背景填充图片
       const { img } = await injection.loadImage(bg);
-      this.ctx.drawImage(img, -(width / 2), -(height / 2), width, height);
+      if (img) this.ctx.drawImage(img, -(width / 2), -(height / 2), width, height);
     }
     this.ctx.restore();
   }
@@ -626,10 +626,11 @@ export class Pen {
       return;
     }
     this.ctx.save();
-    const { width, height } = this._preProcess(view)!;
     const { img, width: sWidth, height: sHeight } = await injection.loadImage(view.url);
     view.sHeight = sHeight;
     view.sWidth = sWidth;
+    if (!img) return;
+    const { width, height } = this._preProcess(view)!;
     // 获得缩放到图片大小级别的裁减框
     let rWidth = view.sWidth;
     let rHeight = view.sHeight;

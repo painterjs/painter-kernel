@@ -1,8 +1,8 @@
 import calculate from './calc';
 import { IView, penCache } from './pen';
 
-let screenK = 0.5,
-  scale = 1;
+let _screenK = 0.5,
+  _scale = 1;
 
 const parsePx = (origin: string, baseSize: number = 100) => {
   const results = /-?[0-9]+(\.[0-9]+)?(rpx|px|%)/.exec(origin);
@@ -12,12 +12,11 @@ const parsePx = (origin: string, baseSize: number = 100) => {
   }
   const unit = results[2];
   const value = parseFloat(origin);
-
   let res = 0;
   if (unit === 'rpx') {
-    res = Math.round(value * (screenK || 0.5) * (scale || 1));
+    res = Math.round(value * (_screenK || 0.5) * (_scale || 1));
   } else if (unit === 'px') {
-    res = Math.round(value * (scale || 1));
+    res = Math.round(value * (_scale || 1));
   } else if (unit === '%') {
     res = Math.round((value * baseSize) / 100);
   }
@@ -47,8 +46,8 @@ export function toPx(str: string | number, baseSize?: number): number {
 }
 
 export function setStringPrototype(screenK = 0.5, scale = 1) {
-  screenK = screenK;
-  scale = scale;
+  _screenK = screenK;
+  _scale = scale;
 }
 
 interface Injection {
