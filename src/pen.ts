@@ -173,13 +173,13 @@ export class Pen {
               view,
               JSON.parse(JSON.stringify(penCache.viewRect || {})),
             );
+            view.rect = {
+              ...newRect,
+              height: newRect.bottom - newRect.top,
+              width: newRect.right - newRect.left,
+            } as any
             if (view.id) {
-              penCache.viewRect[view.id] = {
-                ...newRect,
-                height: newRect.bottom - newRect.top,
-                width: newRect.right - newRect.left,
-              };
-              view.rect = JSON.parse(JSON.stringify(penCache.viewRect[view.id]));
+              penCache.viewRect[view.id] = JSON.parse(JSON.stringify(view.rect));
             }
             this.ctx.save();
             await injection.customActions[view.type].draw(view, this.ctx);
