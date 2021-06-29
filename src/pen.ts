@@ -143,7 +143,7 @@ export class Pen {
     this.ctx.restore();
   }
 
-  _drawAbsolute(view: IView) {
+  _drawAbsolute(view: InnerView) {
     return new Promise<void>(async resolve => {
       if (!(view && view.type)) {
         // 过滤无效 view
@@ -179,6 +179,7 @@ export class Pen {
                 height: newRect.bottom - newRect.top,
                 width: newRect.right - newRect.left,
               };
+              view.rect = JSON.parse(JSON.stringify(penCache.viewRect[view.id]));
             }
             this.ctx.save();
             await injection.customActions[view.type].draw(view, this.ctx);
