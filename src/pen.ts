@@ -534,10 +534,10 @@ export class Pen {
       penCache.viewRect[view.id] = {
         width,
         height,
-        left: x,
-        top: y,
-        right: x + width,
-        bottom: y + height,
+        left: view.rect.left,
+        top: view.rect.top,
+        right: view.rect.right,
+        bottom: view.rect.bottom,
       };
     }
     return {
