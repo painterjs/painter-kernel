@@ -1,7 +1,10 @@
 import { api as QRapi } from './qrcode';
 import { isGradient, doGradient } from './gradient';
 import { CSSProperties } from 'react';
-import { toPx, injection } from './utils';
+import { toPx, injection, substr, substring } from './utils';
+
+const EmojiReg =
+  /[^\u0020-\u007E\u00A0-\u00BE\u2E80-\uA4CF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF\u0080-\u009F\u2000-\u201f\u2026\u2022\u20ac\r\n]$/;
 
 export const penCache: {
   viewRect: {
@@ -43,10 +46,22 @@ export const clearPenCache = (id?: string) => {
 };
 
 export interface IView {
-  type: 'rect' | 'text' | 'image' | 'qrcode';
+  type: 'rect' | 'text' | 'image' | 'qrcode' | 'inlineText';
   text?: string;
   url?: string;
   id?: string;
+  textList: Array<{
+    text: string;
+    css: CSSProperties &
+      Partial<{
+        align: string;
+        verticalAlign: string;
+        mode: 'aspectFill' | 'scaleToFill' | 'auto';
+        textStyle: 'normal' | 'stroke';
+        scalable: boolean;
+        deletable: boolean;
+      }>;
+  }>;
   content?: string;
   /** 事实上painter中view的css属性并不完全与CSSProperties一致。 */
   /** 有一些属性painter并不支持，而当你需要开启一些“高级”能力时，属性的使用方式也与css规范不一致。 */
@@ -161,6 +176,9 @@ export class Pen {
         case 'text':
           await this._fillAbsText(view);
           break;
+        case 'inlineText':
+          await this._fillAbsInlineText(view);
+          break;
         case 'rect':
           await this._drawAbsRect(view);
           break;
@@ -177,7 +195,7 @@ export class Pen {
               ...newRect,
               height: newRect.bottom - newRect.top,
               width: newRect.right - newRect.left,
-            } as any
+            } as any;
             if (view.id) {
               penCache.viewRect[view.id] = JSON.parse(JSON.stringify(view.rect));
             }
@@ -372,6 +390,44 @@ export class Pen {
           textArray: textArray,
           linesArray: linesArray,
         };
+        break;
+      }
+      case 'inlineText': {
+        {
+          // 计算行数
+          let lines = 0;
+          // 文字总长度
+          let textLength = 0;
+          // 行高
+          let lineHeight = 0;
+          const textList = view.textList || [];
+          for (let i = 0; i < textList.length; i++) {
+            let subView = textList[i];
+            const fontWeight = subView.css.fontWeight || '400';
+            const textStyle = subView.css.textStyle || 'normal';
+            if (!subView.css.fontSize) {
+              subView.css.fontSize = '20rpx';
+            }
+            this.ctx.font = `${textStyle} ${fontWeight} ${toPx(subView.css.fontSize)}px "${
+              subView.css.fontFamily || 'sans-serif'
+            }"`;
+            textLength += this.ctx.measureText(subView.text).width;
+            let tempLineHeight = subView.css.lineHeight ? toPx(subView.css.lineHeight) : toPx(subView.css.fontSize);
+            lineHeight = Math.max(lineHeight, tempLineHeight);
+          }
+          width = view.css.width ? toPx(view.css.width, this.style.width) - paddings[1] - paddings[3] : textLength;
+          const calLines = Math.ceil(textLength / width);
+
+          lines += calLines;
+          // lines = view.css.maxLines < lines ? view.css.maxLines : lines;
+          height = lineHeight * lines;
+          extra = {
+            lines: lines,
+            lineHeight: lineHeight,
+            // textArray: textArray,
+            // linesArray: linesArray,
+          };
+        }
         break;
       }
       case 'image': {
@@ -716,7 +772,7 @@ export class Pen {
             break;
           }
           alreadyCount = preLineLength;
-          let text = textArray[j].substr(start, alreadyCount);
+          let text = substr(textArray[j], start, alreadyCount);
           let measuredWith = this.ctx.measureText(text).width;
           // 如果测量大小小于width一个字符的大小，则进行补齐，如果测量大小超出 width，则进行减除
           // 如果已经到文本末尾，也不要进行该循环
@@ -725,13 +781,19 @@ export class Pen {
             (width - measuredWith > fontSize || measuredWith - width > fontSize)
           ) {
             if (measuredWith < width) {
-              text = textArray[j].substr(start, ++alreadyCount);
+              text = substr(textArray[j], start, ++alreadyCount);
+              if (EmojiReg.test(text)) {
+                text = substr(textArray[j], start, ++alreadyCount);
+              }
             } else {
               if (text.length <= 1) {
                 // 如果只有一个字符时，直接跳出循环
                 break;
               }
-              text = textArray[j].substr(start, --alreadyCount);
+              text = substr(textArray[j], start, --alreadyCount);
+              if (EmojiReg.test(text)) {
+                text = substr(textArray[j], start, --alreadyCount);
+              }
               // break;
             }
             measuredWith = this.ctx.measureText(text).width;
@@ -744,7 +806,7 @@ export class Pen {
                 // 如果只有一个字符时，直接跳出循环
                 break;
               }
-              text = text.substring(0, text.length - 1);
+              text = substring(text, 0, text.length - (EmojiReg.test(text) ? 2 : 1));
             }
             text += '...';
             measuredWith = this.ctx.measureText(text).width;
@@ -825,6 +887,127 @@ export class Pen {
                   },
                 ]);
           }
+        }
+      }
+    }
+    this.ctx.restore();
+    this._doBorder(view, width, height);
+  }
+
+  _fillAbsInlineText(view) {
+    if (!view.textList) {
+      return;
+    }
+    if (view.css.background) {
+      // 生成背景
+      this._doBackground(view);
+    }
+    this.ctx.save();
+    const { width, height, extra } = this._preProcess(view, view.css.background && view.css.borderRadius);
+    const { lines, lineHeight } = extra;
+    let staticX = -(width / 2);
+    let lineIndex = 0; // 第几行
+    let x = staticX; // 开始x位置
+    let leftWidth = width; // 当前行剩余多少宽度可以使用
+
+    let getStyle = css => {
+      const fontWeight = css.fontWeight || '400';
+      const textStyle = css.textStyle || 'normal';
+      if (!css.fontSize) {
+        css.fontSize = '20rpx';
+      }
+      return `${textStyle} ${fontWeight} ${toPx(css.fontSize)}px "${css.fontFamily || 'sans-serif'}"`;
+    };
+
+    // 遍历行内的文字数组
+    for (let j = 0; j < view.textList.length; j++) {
+      const subView = view.textList[j];
+
+      // 某个文字开始位置
+      let start = 0;
+      // 文字已使用的数量
+      let alreadyCount = 0;
+      // 文字总长度
+      let textLength = subView.text.length;
+      // 文字总宽度
+      let textWidth = this.ctx.measureText(subView.text).width;
+      // 每个文字的平均宽度
+      let preWidth = Math.ceil(textWidth / textLength);
+
+      // 循环写文字
+      while (alreadyCount < textLength) {
+        // alreadyCount - start + 1 -> 当前摘取出来的文字
+        // 比较可用宽度，寻找最大可写文字长度
+        while ((alreadyCount - start + 1) * preWidth < leftWidth && alreadyCount < textLength) {
+          alreadyCount++;
+        }
+
+        // 取出文字
+        let text = substr(subView.text, start, alreadyCount - start);
+
+        const y = -(height / 2) + toPx(subView.css.fontSize) + lineIndex * lineHeight;
+
+        // 设置文字样式
+        this.ctx.font = getStyle(subView.css);
+
+        this.ctx.fillStyle = subView.css.color || 'black';
+        this.ctx.textAlign = 'left';
+
+        // 执行画布操作
+        if (subView.css.textStyle === 'stroke') {
+          this.ctx.strokeText(text, x, y);
+        } else {
+          this.ctx.fillText(text, x, y);
+        }
+
+        // 当次已使用宽度
+        let currentUsedWidth = this.ctx.measureText(text).width;
+
+        const fontSize = toPx(subView.css.fontSize);
+
+        // 画 textDecoration
+        let textDecoration;
+        if (subView.css.textDecoration) {
+          this.ctx.lineWidth = fontSize / 13;
+          this.ctx.beginPath();
+          if (/\bunderline\b/.test(subView.css.textDecoration)) {
+            this.ctx.moveTo(x, y);
+            this.ctx.lineTo(x + currentUsedWidth, y);
+            textDecoration = {
+              moveTo: [x, y],
+              lineTo: [x + currentUsedWidth, y],
+            };
+          }
+          if (/\boverline\b/.test(subView.css.textDecoration)) {
+            this.ctx.moveTo(x, y - fontSize);
+            this.ctx.lineTo(x + currentUsedWidth, y - fontSize);
+            textDecoration = {
+              moveTo: [x, y - fontSize],
+              lineTo: [x + currentUsedWidth, y - fontSize],
+            };
+          }
+          if (/\bline-through\b/.test(subView.css.textDecoration)) {
+            this.ctx.moveTo(x, y - fontSize / 3);
+            this.ctx.lineTo(x + currentUsedWidth, y - fontSize / 3);
+            textDecoration = {
+              moveTo: [x, y - fontSize / 3],
+              lineTo: [x + currentUsedWidth, y - fontSize / 3],
+            };
+          }
+          this.ctx.closePath();
+          this.ctx.strokeStyle = subView.css.color;
+          this.ctx.stroke();
+        }
+
+        // 重置数据
+        start = alreadyCount;
+        leftWidth -= currentUsedWidth;
+        x += currentUsedWidth;
+        // 如果剩余宽度 小于等于0 或者小于一个字的平均宽度，换行
+        if (leftWidth <= 0 || leftWidth < preWidth) {
+          leftWidth = width;
+          x = staticX;
+          lineIndex++;
         }
       }
     }
